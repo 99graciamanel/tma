@@ -1,0 +1,170 @@
+version: '3.7'
+
+services:
+
+  elastiflow-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.8.1
+    container_name: elastiflow-elasticsearch
+    restart: 'no'
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 131072
+        hard: 131072
+      nproc: 8192
+      fsize: -1
+    network_mode: host
+    volumes:
+      # You will need to create the path and permissions on the local file system where Elasticsearch will store data.
+      # For example...
+      #   mkdir /var/lib/elastiflow_es && chown -R 1000:1000 /var/lib/elastiflow_es
+      - /var/lib/elastiflow_es:/usr/share/elasticsearch/data
+    environment:
+      # JVM Heap size
+      #   - this should be at least 2GB for simple testing, receiving only a few flows per second.
+      #   - for production environments upto 31GB is recommended.
+      ES_JAVA_OPTS: '-Xms4g -Xmx4g'
+
+      cluster.name: elastiflow
+
+      bootstrap.memory_lock: 'true'
+
+      network.host: 0.0.0.0
+      http.port: 9200
+      discovery.type: 'single-node'
+
+      indices.query.bool.max_clause_count: 8192
+      search.max_buckets: 250000
+
+      action.destructive_requires_name: 'true'
+
+  elastiflow-kibana:
+    image: docker.elastic.co/kibana/kibana:7.8.1
+    container_name: elastiflow-kibana
+    restart: 'no'
+    depends_on:
+      - elastiflow-elasticsearch
+    network_mode: host
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 5601
+      SERVER_MAXPAYLOADBYTES: 8388608
+
+      ELASTICSEARCH_HOSTS: "http://127.0.0.1:9200"
+      ELASTICSEARCH_REQUESTTIMEOUT: 132000
+      ELASTICSEARCH_SHARDTIMEOUT: 120000
+
+      KIBANA_DEFAULTAPPID: "dashboard/653cf1e0-2fd2-11e7-99ed-49759aed30f5"
+      KIBANA_AUTOCOMPLETETIMEOUT: 3000
+      KIBANA_AUTOCOMPLETETERMINATEAFTER: 2500000
+
+      LOGGING_DEST: stdout
+      LOGGING_QUIET: 'false'
+
+  elastiflow-logstash:
+    image: robcowart/elastiflow-logstash:4.0.1
+    container_name: elastiflow-logstash
+    restart: 'no'
+    depends_on:
+      - elastiflow-elasticsearch
+    network_mode: host
+    environment:
+      # JVM Heap size - this MUST be at least 3GB (4GB preferred)
+      LS_JAVA_OPTS: '-Xms4g -Xmx4g'
+
+      # ElastiFlow global configuration
+      ELASTIFLOW_AGENT_ID: elastiflow
+      ELASTIFLOW_GEOIP_CACHE_SIZE: 16384
+      ELASTIFLOW_GEOIP_LOOKUP: 'true'
+      ELASTIFLOW_ASN_LOOKUP: 'true'
+      ELASTIFLOW_OUI_LOOKUP: 'false'
+      ELASTIFLOW_POPULATE_LOGS: 'true'
+      ELASTIFLOW_KEEP_ORIG_DATA: 'true'
+      ELASTIFLOW_DEFAULT_APPID_SRCTYPE: '__UNKNOWN'
+
+      # Name resolution option
+      ELASTIFLOW_RESOLVE_IP2HOST: 'false'
+      ELASTIFLOW_NAMESERVER: '127.0.0.1'
+      ELASTIFLOW_DNS_HIT_CACHE_SIZE: 25000
+      ELASTIFLOW_DNS_HIT_CACHE_TTL: 900
+      ELASTIFLOW_DNS_FAILED_CACHE_SIZE: 75000
+      ELASTIFLOW_DNS_FAILED_CACHE_TTL: 3600
+
+      ELASTIFLOW_ES_HOST: '127.0.0.1:9200'
+      #ELASTIFLOW_ES_USER: 'elastic'
+      #ELASTIFLOW_ES_PASSWD: 'changeme'
+
+      ELASTIFLOW_NETFLOW_IPV4_PORT: 2055
+      ELASTIFLOW_NETFLOW_UDP_WORKERS: 2
+      ELASTIFLOW_NETFLOW_UDP_QUEUE_SIZE: 4096
+      ELASTIFLOW_NETFLOW_UDP_RCV_BUFF: 33554432
+
+      ELASTIFLOW_SFLOW_IPV4_PORT: 6343
+      ELASTIFLOW_SFLOW_UDP_WORKERS: 2
+      ELASTIFLOW_SFLOW_UDP_QUEUE_SIZE: 4096
+      ELASTIFLOW_SFLOW_UDP_RCV_BUFF: 33554432
+
+      ELASTIFLOW_IPFIX_UDP_IPV4_PORT: 4739
+      ELASTIFLOW_IPFIX_UDP_WORKERS: 2
+      ELASTIFLOW_IPFIX_UDP_QUEUE_SIZE: 4096
+      ELASTIFLOW_IPFIX_UDP_RCV_BUFF: 33554432
+
+  flow-collector:
+    image: elastiflow/flow-collector:5.2.0
+    container_name: flow-collector
+    restart: 'unless-stopped'
+    volumes:
+      - /etc/elastiflow:/etc/elastiflow
+    environment:
+      EF_FLOW_SERVER_UDP_IP: '0.0.0.0'
+      EF_FLOW_SERVER_UDP_PORT: 6343
+      EF_FLOW_DECODER_ENRICH_IPADDR_METADATA_ENABLE: 'false'
+      EF_FLOW_DECODER_ENRICH_DNS_ENABLE: 'false'
+      EF_FLOW_DECODER_ENRICH_DNS_NAMESERVER_IP: ''
+      EF_FLOW_DECODER_ENRICH_DNS_NAMESERVER_TIMEOUT: 3000
+      EF_FLOW_DECODER_ENRICH_MAXMIND_ASN_ENABLE: 'false'
+      EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_ENABLE: 'false'
+      EF_FLOW_DECODER_ENRICH_RISKIQ_ASN_ENABLE: 'false'
+      EF_FLOW_DECODER_ENRICH_RISKIQ_THREAT_ENABLE: 'false'
+      
+      EF_FLOW_OUTPUT_ELASTICSEARCH_ENABLE: 'true'
+      EF_FLOW_OUTPUT_ELASTICSEARCH_ECS_ENABLE: 'false'
+      EF_FLOW_OUTPUT_ELASTICSEARCH_INDEX_TEMPLATE_SHARDS: 1
+      EF_FLOW_OUTPUT_ELASTICSEARCH_INDEX_TEMPLATE_REPLICAS: 0
+      EF_FLOW_OUTPUT_ELASTICSEARCH_ADDRESSES: 'elastiflow-elasticsearch:9200'
+      EF_FLOW_OUTPUT_ELASTICSEARCH_USERNAME: 'elastic'
+      EF_FLOW_OUTPUT_ELASTICSEARCH_PASSWORD: 'changeme'
+      EF_FLOW_OUTPUT_ELASTICSEARCH_TLS_ENABLE: 'false'
+      EF_FLOW_OUTPUT_ELASTICSEARCH_TLS_SKIP_VERIFICATION: 'false'
+      EF_FLOW_OUTPUT_ELASTICSEARCH_TLS_CA_CERT_FILEPATH: ''
+      EF_FLOW_OUTPUT_SPLUNK_HEC_ENABLE: 'false'
+      EF_FLOW_OUTPUT_SPLUNK_HEC_HOST: ''
+      EF_FLOW_OUTPUT_SPLUNK_HEC_TOKEN: ''
+      EF_FLOW_OUTPUT_LOGZIO_ENABLE: 'false'
+      EF_FLOW_OUTPUT_LOGZIO_TOKEN: ''
+      EF_FLOW_OUTPUT_KAFKA_ENABLE: 'false'
+      EF_FLOW_OUTPUT_KAFKA_BROKERS: ''
+      EF_FLOW_OUTPUT_KAFKA_SASL_ENABLE: 'false'
+      EF_FLOW_OUTPUT_RISKIQ_ENABLE: 'false'
+
+  sflow:
+    image: sflow/host-sflow
+    container_name: sflow
+    environment:
+      COLLECTOR: 'flow-collector'
+    depends_on:
+      - flow-collector
+#  sflow:
+#    image: sflow/sflow-rt
+#    container_name: sflow
+#    ports:
+#      - 6343:6343/udp
+#      - 8008:8008/udp
+#    environment:
+#      RTMEM: '2G'
+      
+volumes:
+  elasticsearch-data:
+    driver: local
