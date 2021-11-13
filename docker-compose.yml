@@ -38,12 +38,11 @@ services:
     image: elastiflow/flow-collector:5.2.0
     container_name: flow-collector
     restart: 'unless-stopped'
-    network_mode: 'host'
     volumes:
       - /etc/elastiflow:/etc/elastiflow
     environment:
       EF_FLOW_SERVER_UDP_IP: '0.0.0.0'
-      EF_FLOW_SERVER_UDP_PORT: 9995
+      EF_FLOW_SERVER_UDP_PORT: 6343
       EF_FLOW_DECODER_ENRICH_IPADDR_METADATA_ENABLE: 'false'
       EF_FLOW_DECODER_ENRICH_DNS_ENABLE: 'false'
       EF_FLOW_DECODER_ENRICH_DNS_NAMESERVER_IP: ''
@@ -52,11 +51,12 @@ services:
       EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_ENABLE: 'false'
       EF_FLOW_DECODER_ENRICH_RISKIQ_ASN_ENABLE: 'false'
       EF_FLOW_DECODER_ENRICH_RISKIQ_THREAT_ENABLE: 'false'
+      
       EF_FLOW_OUTPUT_ELASTICSEARCH_ENABLE: 'true'
       EF_FLOW_OUTPUT_ELASTICSEARCH_ECS_ENABLE: 'false'
       EF_FLOW_OUTPUT_ELASTICSEARCH_INDEX_TEMPLATE_SHARDS: 1
       EF_FLOW_OUTPUT_ELASTICSEARCH_INDEX_TEMPLATE_REPLICAS: 0
-      EF_FLOW_OUTPUT_ELASTICSEARCH_ADDRESSES: '127.0.0.1:9200'
+      EF_FLOW_OUTPUT_ELASTICSEARCH_ADDRESSES: 'elasticsearch:9200'
       EF_FLOW_OUTPUT_ELASTICSEARCH_USERNAME: 'elastic'
       EF_FLOW_OUTPUT_ELASTICSEARCH_PASSWORD: 'changeme'
       EF_FLOW_OUTPUT_ELASTICSEARCH_TLS_ENABLE: 'false'
@@ -73,13 +73,19 @@ services:
       EF_FLOW_OUTPUT_RISKIQ_ENABLE: 'false'
 
   sflow:
-    image: sflow/sflow-rt
+    image: sflow/host-sflow
     container_name: sflow
-    ports:
-      - 6343:6343/udp
-      - 8008:8008/udp
     environment:
-      RTMEM: '2G'
+      COLLECTOR: 'flow-collector'
+
+#  sflow:
+#    image: sflow/sflow-rt
+#    container_name: sflow
+#    ports:
+#      - 6343:6343/udp
+#      - 8008:8008/udp
+#    environment:
+#      RTMEM: '2G'
       
 volumes:
   elasticsearch-data:
