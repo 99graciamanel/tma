@@ -25,7 +25,7 @@ services:
       # JVM Heap size
       #   - this should be at least 2GB for simple testing, receiving only a few flows per second.
       #   - for production environments upto 31GB is recommended.
-      ES_JAVA_OPTS: '-Xms4g -Xmx4g'
+      ES_JAVA_OPTS: '-Xms4g -Xmx4g' #-Djava.net.preferIPv4Stack=true'
 
       cluster.name: elastiflow
 
@@ -85,7 +85,7 @@ services:
       #EF_FLOW_LOGGER_FILE_LOG_SIZE: '100MB'
 
       EF_FLOW_SERVER_UDP_IP: '0.0.0.0'
-      EF_FLOW_SERVER_UDP_PORT: 9995
+      EF_FLOW_SERVER_UDP_PORT: 6343
       #EF_FLOW_SERVER_UDP_PACKET_STREAM_MAX_SIZE: 
       #EF_FLOW_SERVER_UDP_READ_BUFFER_MAX_SIZE: 134217728
 
@@ -97,10 +97,10 @@ services:
       #EF_FLOW_DECODER_NETFLOW6_ENABLE: 'true'
       #EF_FLOW_DECODER_NETFLOW7_ENABLE: 'true'
       #EF_FLOW_DECODER_NETFLOW9_ENABLE: 'true'
-      #EF_FLOW_DECODER_SFLOW5_ENABLE: 'true'
-      #EF_FLOW_DECODER_SFLOW_FLOWS_ENABLE: 'true'
-      #EF_FLOW_DECODER_SFLOW_FLOWS_KEEP_SAMPLES: 'false'
-      #EF_FLOW_DECODER_SFLOW_COUNTERS_ENABLE: 'true'
+      EF_FLOW_DECODER_SFLOW5_ENABLE: 'true'
+      EF_FLOW_DECODER_SFLOW_FLOWS_ENABLE: 'true'
+      EF_FLOW_DECODER_SFLOW_FLOWS_KEEP_SAMPLES: 'false'
+      EF_FLOW_DECODER_SFLOW_COUNTERS_ENABLE: 'true'
 
       #EF_FLOW_DECODER_TRANSLATE_KEEP_IDS: 'default'
 
@@ -288,19 +288,7 @@ services:
   sflow:
     image: sflow/host-sflow
     container_name: sflow
+    network_mode: host
     environment:
-      COLLECTOR: 'flow-collector'
-    depends_on:
-      - flow-collector
-#  sflow:
-#    image: sflow/sflow-rt
-#    container_name: sflow
-#    ports:
-#      - 6343:6343/udp
-#      - 8008:8008/udp
-#    environment:
-#      RTMEM: '2G'
-      
-volumes:
-  elasticsearch-data:
-    driver: local
+      NET: '^wlo'
+      COLLECTOR: '127.0.0.1'
