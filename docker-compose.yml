@@ -284,6 +284,8 @@ services:
       #EF_FLOW_OUTPUT_RISKIQ_PORT: 
       #EF_FLOW_OUTPUT_RISKIQ_CUSTOMER_UUID: ''
       #EF_FLOW_OUTPUT_RISKIQ_CUSTOMER_ENCRYPTION_KEY: ''
+    depends_on:
+      - elastiflow-elasticsearch
 
   sflow:
     image: sflow/host-sflow
