@@ -9,4 +9,4 @@ do
   sed "s/net-interface/$opt/" docker-compose.yml > docker-compose-configured-$opt.yml
   break
 done
-sudo docker-compose -f docker-compose-configured-$opt up
+sudo docker-compose -f docker-compose-configured-$opt.yml up
