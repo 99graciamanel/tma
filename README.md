@@ -6,6 +6,10 @@
 - Automatitzar el config
 - Probar-ho a la rasp
 
+## How to load 'default' config
+
+Saved Objects --> Import --> tma/configs/kibana-7.13.1-codex-light.ndjson
+
 ## Network architecture
 
 Target architecture for router without flow recording capabilities:
