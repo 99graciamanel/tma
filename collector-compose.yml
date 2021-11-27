@@ -286,11 +286,3 @@ services:
       #EF_FLOW_OUTPUT_RISKIQ_CUSTOMER_ENCRYPTION_KEY: ''
     depends_on:
       - elastiflow-elasticsearch
-
-  sflow:
-    image: sflow/host-sflow
-    container_name: sflow
-    network_mode: host
-    environment:
-      NET: 'net-interface'
-      COLLECTOR: '127.0.0.1'

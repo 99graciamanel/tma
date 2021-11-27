@@ -1,0 +1,10 @@
+version: '3.7'
+
+services:
+  sflow:
+    image: sflow/host-sflow
+    container_name: sflow
+    network_mode: host
+    environment:
+      NET: 'net-interface'
+      COLLECTOR: 'flow-collector-address'
