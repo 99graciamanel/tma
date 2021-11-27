@@ -292,5 +292,5 @@ services:
     container_name: sflow
     network_mode: host
     environment:
-      NET: 'enp3s0'
+      NET: 'net-interface'
       COLLECTOR: '127.0.0.1'
