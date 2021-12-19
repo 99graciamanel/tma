@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Clean opened dockers
-./dockerclean.sh
+#./dockerclean.sh
 
 # Get interface to record in
 interfaces=($(python3 scripts/list_interfaces.py))
