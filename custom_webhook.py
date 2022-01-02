@@ -1,28 +1,23 @@
 import logging
-
 import time
 import telegram
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-
 import requests
 import json
 import threading
 from datetime import datetime
 
-exporter_ip = '192.168.1.39'
-banned_ips = set(['147.83.2.135'])
+banned_ips = ['147.83.2.134', '147.83.2.135']
 timestamp = 0
-
 url = 'http://0.0.0.0:9200/_search'
 content = {
   "query": {
     "bool": {
       "must": [
-         {"match_phrase": {"flow.export.host.name": exporter_ip}},
-         {"match_phrase": {"flow.server.ip.addr": banned_ips}},
+         {"match_phrase": {"flow.server.ip.addr": ["192.168.1.39"]}},
          {"range": {
            "@timestamp": {
-             "gte": timestamp
+             "gte": 1641122028632
               }
            }
          }
@@ -30,61 +25,21 @@ content = {
     }
   }
 }
+help_message = '''\
+- help
+- get_blacklist
+- add_blacklist
+- remove_blacklist
+'''
 
-# Enable logging:
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+# Telegram token
 global token
 token = "5089246815:AAHAtnr5iV8twx-rIFgrS4PCoHWZnyF9alg"
 
-def getBlackList(update, context):
-    update.message.reply_text("Current blacklist is: %s" % (', '.join(banned_ips)))
+# Initialize logger
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def addToBlacklist(update, context):
-    try:
-        ip = context.args[0]
-        if not isValidIP(ip):
-            update.message.reply_text("Not valid IP")
-            return
-
-        banned_ips.add(ip)
-        content['query']['bool']['must'][0]['match_phrase']['flow.export.host.name'] = banned_ips
-
-        print(', '.join(banned_ips))
-        update.message.reply_text("Added to banned IPs. Current blacklist is: %s" % (', '.join(banned_ips)))
-
-    except(IndexError, ValueError):
-        update.message.reply_text('/add_to_blacklist <Add a valid IP>')
-
-def removeFromBlacklist(update, context):
-    try:
-        ip = context.args[0]
-        if not isValidIP(ip):
-            update.message.reply_text("Not valid IP")
-            return
-
-        if not (ip in banned_ips):
-            update.message.reply_text("IP not found in blacklist. Current is: %s" % (', '.join(banned_ips)))
-            return
-
-        banned_ips.remove(ip)
-        content['query']['bool']['must'][0]['match_phrase']['flow.export.host.name'] = banned_ips
-
-        print(', '.join(banned_ips))
-        update.message.reply_text("Removed from banned IPs. Current blacklist is: %s" % (', '.join(banned_ips)))
-
-    except(IndexError, ValueError):
-        update.message.reply_text('/remove_from_blacklist <Add a valid IP>')
-
-def help(update, context):
-    update.message.reply_text(" \
-        - help\n\
-        - get_blacklist\n\
-        - add_to_blacklist\n\
-        - remove_from_blacklist\n\
-")
 
 def isValidIP(ip):
     parts = ip.split(".")
@@ -100,17 +55,9 @@ def isValidIP(ip):
 
     return True
 
-def error(update, context): # Funcio per defecte del bot
-    """Log Errors caused by Updates."""
-    logger.warning('Update "%s" caused error "%s"', update, context.error)
 
-def send(msg):
-    bot = telegram.Bot(token=token)
-    bot.sendMessage(chat_id="-624999628", text=msg)
-
-
-class BannedIps:
-    def __init__(self, intial):
+class BannedIPs:
+    def __init__(self, initial):
         self.ips = set(initial)
         self.lock = threading.Lock()
 
@@ -124,31 +71,41 @@ class BannedIps:
         with self.lock:
             self.ips.remove(ip)
 
-    def get_list(self, ip):
+    def get_list(self):
         with self.lock:
             return list(self.ips)
 
 
 class AlertWorker(threading.Thread):
-    def __init__(self, banned_ips: BannedIps, *args, **kwargs):
+    def __init__(self, banned_ips: BannedIPs, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.banned_ips = banned_ips
 
     def run(self):
         logger.info('Started ALERT thread')
         while True:
-            response = self.send_request()
-            self.handle_response(response)
+            try:
+                response = self.send_request()
+                self.handle_response(response)
+            except ValueError:
+                pass
             time.sleep(5)
 
     def send_request(self):
         timestamp = round((datetime.now().timestamp() - 60) * 1000)
-        content['query']['bool']['must'][2]['range']['@timestamp']['gte'] = timestamp
+        content['query']['bool']['must'][0]["match_phrase"]["flow.server.ip.addr"] = banned_ips
+        #content['query']['bool']['must'][0]["match_phrase"]["flow.server.ip.addr"] =  self.banned_ips.get_list()
+        content['query']['bool']['must'][1]['range']['@timestamp']['gte'] = timestamp
         response = requests.post(url, json=content)
+        if response.status_code != 200:
+            logger.warning(f'Elasticsearch request failed with code {response.status_code}')
+            json_querry = json.dumps(content)
+            logger.warning(json_querry)
+            raise ValueError('Bad request')
         return json.loads(response.text)
 
     def handle_response(self, response):
-        if response_data['hits']['total']['value'] > 0:
+        if response['hits']['total']['value'] > 0:
             print('Connection detected to UPC')
             self.send_telegram('Connection detected to UPC')
 
@@ -157,33 +114,56 @@ class AlertWorker(threading.Thread):
         bot.sendMessage(chat_id="-624999628", text=msg)
 
 
+class AddressListWorker(threading.Thread):
+    def __init__(self, banned_ips: BannedIPs, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.banned_ips = banned_ips
+        self.updater = Updater(token, use_context=True)
+        self.dispatcher = self.updater.dispatcher
+        self.dispatcher.add_handler(CommandHandler("help", self.get_help))
+        self.dispatcher.add_handler(CommandHandler("get_blacklist", self.get_blacklist))
+        self.dispatcher.add_handler(CommandHandler("add_blacklist", self.add_blacklist))
+        self.dispatcher.add_handler(CommandHandler("remove_blacklist", self.remove_blacklist))
+        self.dispatcher.add_error_handler(self.error)
+
+    def run(self):
+        logger.info('Started LIST thread')
+        self.updater.start_polling()
+        self.updater.idle()
+
+    def get_help(self, update, context):
+        update.message.reply_text(help_message)
+
+    def get_blacklist(self, update, context):
+        ip_list = self.banned_ips.get_list()
+        ip_str = map(lambda s: f'  - {s}', self.banned_ips)
+        ip_str = '\n'.join(ip_str)
+        update.message.reply_text(f'Banned IPs:\n{ip_str}')
+
+    def add_blacklist(self, update, context):
+        try:
+            ip = context.args[0]
+            self.banned_ips.add(ip)
+            update.message.reply_text(f'Added {ip} to banned IPs.')
+        except(IndexError, ValueError):
+            update.message.reply_text('/add_to_blacklist <Add a valid IP>')
+
+    def remove_blacklist(self):
+        try:
+            ip = context.args[0]
+            banned_ips.remove(ip)
+            update.message.reply_text(f'Removed {ip} from banned IPs.')
+        except(IndexError, ValueError):
+            update.message.reply_text('/remove_from_blacklist <Add a valid IP>')
+
+    def error(self, update, context):
+        logger.error(f'Update \"{update}\" caused error \"{context.error}\"')
+        logger.error('Update services may be down')
+
+
 if __name__ == '__main__':
-
-    updater = Updater(token, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("help", help))
-    dp.add_handler(CommandHandler("get_blacklist", getBlackList))
-    dp.add_handler(CommandHandler("add_to_blacklist", addToBlacklist))
-    dp.add_handler(CommandHandler("remove_from_blacklist", removeFromBlacklist))
-
-    dp.add_error_handler(error)
-
-    updater.start_polling()
-    updater.idle()
-
-    while True:
-        timestamp = round((datetime.now().timestamp() - 60) * 1000)
-        print(timestamp)
-
-        content['query']['bool']['must'][2]['range']['@timestamp']['gte'] = timestamp
-        print(content)
-
-        response = requests.post(url, json=content)
-        response_data = json.loads(response.text)
-
-        print(response_data)
-        if response_data['hits']['total']['value'] > 0:
-            print('Connection detected to UPC')
-            send('Connection detected to UPC')
-        time.sleep(5)
+    banned = BannedIPs(banned_ips)
+    alert_worker = AlertWorker(banned, daemon=True)
+    address_worker = AddressListWorker(banned, daemon=True)
+    alert_worker.start()
+    address_worker.run()
