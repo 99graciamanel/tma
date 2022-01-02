@@ -71,6 +71,7 @@ services:
     network_mode: 'host'
     volumes:
       - /etc/elastiflow:/etc/elastiflow
+      - ./maxmind:/etc/elastiflow/maxmind
     environment:
       #EF_FLOW_ACCOUNT_ID: ''
       #EF_FLOW_LICENSE_KEY: ''
@@ -126,11 +127,11 @@ services:
       EF_FLOW_DECODER_ENRICH_MAXMIND_ASN_ENABLE: 'false'
       #EF_FLOW_DECODER_ENRICH_MAXMIND_ASN_PATH: 'maxmind/GeoLite2-ASN.mmdb'
 
-      EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_ENABLE: 'false'
-      #EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_PATH: 'maxmind/GeoLite2-City.mmdb'
-      #EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_VALUES: 'city,country,country_code,location,timezone'
-      #EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_LANG: 'en'
-      #EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_INCLEXCL_PATH: 'maxmind/incl_excl.yml'
+      EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_ENABLE: 'true'
+      EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_PATH: 'maxmind/GeoLite2-City.mmdb'
+      EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_VALUES: 'city,country,country_code,location,timezone'
+      EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_LANG: 'en'
+      #EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_INCLEXCL_PATH: 'maxmind/incl_excl.																																																																				yml'
       #EF_FLOW_DECODER_ENRICH_MAXMIND_GEOIP_INCLEXCL_REFRESH_RATE: 15
 
       EF_FLOW_DECODER_ENRICH_RISKIQ_ASN_ENABLE: 'false'
