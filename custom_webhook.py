@@ -6,6 +6,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
 import requests
 import json
+import threading
 from datetime import datetime
 
 exporter_ip = '192.168.1.39'
@@ -106,6 +107,55 @@ def error(update, context): # Funcio per defecte del bot
 def send(msg):
     bot = telegram.Bot(token=token)
     bot.sendMessage(chat_id="-624999628", text=msg)
+
+
+class BannedIps:
+    def __init__(self, intial):
+        self.ips = set(initial)
+        self.lock = threading.Lock()
+
+    def add(self, ip):
+        if not isValidIP(ip):
+            raise ValueError(f'\"{ip}\" is not a valid ip')
+        with self.lock:
+            self.ips.add(ip)
+
+    def remove(self, ip):
+        with self.lock:
+            self.ips.remove(ip)
+
+    def get_list(self, ip):
+        with self.lock:
+            return list(self.ips)
+
+
+class AlertWorker(threading.Thread):
+    def __init__(self, banned_ips: BannedIps, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.banned_ips = banned_ips
+
+    def run(self):
+        logger.info('Started ALERT thread')
+        while True:
+            response = self.send_request()
+            self.handle_response(response)
+            time.sleep(5)
+
+    def send_request(self):
+        timestamp = round((datetime.now().timestamp() - 60) * 1000)
+        content['query']['bool']['must'][2]['range']['@timestamp']['gte'] = timestamp
+        response = requests.post(url, json=content)
+        return json.loads(response.text)
+
+    def handle_response(self, response):
+        if response_data['hits']['total']['value'] > 0:
+            print('Connection detected to UPC')
+            self.send_telegram('Connection detected to UPC')
+
+    def send_telegram(self, message: str):
+        bot = telegram.Bot(token=token)
+        bot.sendMessage(chat_id="-624999628", text=msg)
+
 
 if __name__ == '__main__':
 
