@@ -17,6 +17,14 @@ help_message = '''\
 - add_blacklist
 - remove_blacklist
 '''
+alert_message = '''\
+Detected security event {flow_id}:
+- Exporter: {exporter}
+- Source: {src}
+- Source port: {src_p}
+- Destination: {dst}
+- Destination port: {dst_p}
+'''
 
 # Telegram token
 global token
@@ -35,7 +43,7 @@ class BannedIPs:
     def add(self, ip):
         ip = ipaddress.ip_address(ip)
         with self.lock:
-            self.ips.add(ip)
+            self.ips.add(str(ip))
 
     def remove(self, ip):
         with self.lock:
@@ -65,6 +73,7 @@ class BlacklistAlertWorker(threading.Thread):
             }
           }
         }
+        self.registered_events = set()
 
     def run(self):
         logger.info('Started Blacklist ALERT thread')
@@ -80,6 +89,9 @@ class BlacklistAlertWorker(threading.Thread):
         self.content['query']['bool']['should'] = []
         for ip in self.banned_ips.get_list():
             self.content['query']['bool']['should'].append({"term": { "flow.server.ip.addr": ip}})
+        self.content['query']['bool']['must_not'] = []
+        for event in self.registered_events:
+            self.content['query']['bool']['must_not'].append({"term": { "_id": event}})
 
     def get_timestamp(self):
         timestamp = round((datetime.now().timestamp() - 60) * 1000)
@@ -96,10 +108,35 @@ class BlacklistAlertWorker(threading.Thread):
             raise ValueError('Bad request')
         return json.loads(response.text)
 
+    def get_short_message(self, hit):
+        flow = hit['_source']['flow']
+        src = flow['client']['ip']['addr']
+        dst = flow['server']['ip']['addr']
+        return f'Connection detected form {src} to {dst}'
+
+    def get_message(self, hit):
+        flow = hit['_source']['flow']
+        data = {
+            'flow_id': hit['_id'],
+            'src': flow['client']['ip']['addr'],
+            'src_p': flow['client']['l4']['port']['name'],
+            'dst': flow['server']['ip']['addr'],
+            'dst_p': flow['server']['l4']['port']['name'],
+            'exporter': flow['export']['ip']['addr']
+        }
+        return alert_message.format(**data)
+
+    def register_event(self, hit):
+        self.registered_events.add(hit['_id'])
+
     def handle_response(self, response):
         if response['hits']['total']['value'] > 0:
-            print('Connection detected to UPC')
-            self.send_telegram('Connection detected to UPC')
+            for hit in response['hits']['hits']:
+                self.send_telegram(self.get_message(hit))
+                logger.info(self.get_short_message(hit))
+                self.register_event(hit)
+        else:
+            logger.info('Everything is fine.')
 
     def send_telegram(self, message: str):
         bot = telegram.Bot(token=token)
@@ -197,7 +234,7 @@ class AddressListWorker(threading.Thread):
             update.message.reply_text(f'Added {ip} to banned IPs.')
             logger.info(f'Added {ip} to banned IPs.')
         except(IndexError, ValueError):
-            update.message.reply_text('/add_to_blacklist <Add a valid IP>')
+            update.message.reply_text('/add_blacklist <Add a valid IP>')
 
     def remove_blacklist(self, update, context):
         try:
@@ -206,11 +243,12 @@ class AddressListWorker(threading.Thread):
             update.message.reply_text(f'Removed {ip} from banned IPs.')
             logger.info(f'Removed {ip} from banned IPs.')
         except(IndexError, ValueError):
-            update.message.reply_text('/remove_from_blacklist <Add a valid IP>')
+            update.message.reply_text('/remove_blacklist <Add a valid IP>')
 
     def error(self, update, context):
         logger.error(f'Update \"{update}\" caused error \"{context.error}\".')
         logger.error('Update services may be down.')
+
 
 if __name__ == '__main__':
     banned = BannedIPs(banned_ips)
