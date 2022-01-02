@@ -150,12 +150,16 @@ class DDoSAlertWorker(threading.Thread):
 
     def handle_response(self, response):
         if response['count'] > 100:
-            print('DDoS found for our attacks')
-            self.send_telegram('DDoS found for our attacks')
+            print('DDoS found for our servers')
+            self.send_telegram('DDoS found for our servers')
+            self.sleep_ddos_alerts()
 
     def send_telegram(self, message: str):
         bot = telegram.Bot(token=token)
         bot.sendMessage(chat_id="-624999628", text=message)
+
+    def sleep_ddos_alerts(self):
+        time.sleep(60)
 
 
 class AddressListWorker(threading.Thread):
@@ -207,7 +211,6 @@ class AddressListWorker(threading.Thread):
     def error(self, update, context):
         logger.error(f'Update \"{update}\" caused error \"{context.error}\".')
         logger.error('Update services may be down.')
-
 
 if __name__ == '__main__':
     banned = BannedIPs(banned_ips)
