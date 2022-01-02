@@ -9,7 +9,7 @@ from datetime import datetime
 
 banned_ips = ['147.83.2.134', '147.83.2.135']
 timestamp = 0
-url = 'http://0.0.0.0:9200/elastiflow*/_search'
+url = 'http://0.0.0.0:9200/elastiflow*/'
 help_message = '''\
 - help
 - get_blacklist
@@ -25,7 +25,6 @@ token = "5089246815:AAHAtnr5iV8twx-rIFgrS4PCoHWZnyF9alg"
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 def isValidIP(ip):
     parts = ip.split(".")
     if len(parts) != 4:
@@ -39,7 +38,6 @@ def isValidIP(ip):
             return False
 
     return True
-
 
 class BannedIPs:
     def __init__(self, initial):
@@ -60,11 +58,11 @@ class BannedIPs:
         with self.lock:
             return list(self.ips)
 
-
-class AlertWorker(threading.Thread):
+class BlacklistAlertWorker(threading.Thread):
     def __init__(self, banned_ips: BannedIPs, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.banned_ips = banned_ips
+        self.url = "%s%s" % (url, '_search')
         self.content = {
           "query": {
             "bool": {
@@ -81,7 +79,7 @@ class AlertWorker(threading.Thread):
         }
 
     def run(self):
-        logger.info('Started ALERT thread')
+        logger.info('Started Blacklist ALERT thread')
         while True:
             try:
                 response = self.send_request()
@@ -102,10 +100,10 @@ class AlertWorker(threading.Thread):
     def send_request(self):
         self.get_rules()
         self.get_timestamp()
-        response = requests.post(url, json=self.content)
+        response = requests.post(self.url, json=self.content)
         if response.status_code != 200:
             logger.warning(f'Elasticsearch request failed with code {response.status_code}')
-            json_querry = json.dumps(content)
+            json_querry = json.dumps(self.content)
             logger.warning(json_querry)
             raise ValueError('Bad request')
         return json.loads(response.text)
@@ -119,6 +117,56 @@ class AlertWorker(threading.Thread):
         bot = telegram.Bot(token=token)
         bot.sendMessage(chat_id="-624999628", text=message)
 
+class DDoSAlertWorker(threading.Thread):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.url = "%s%s" % (url, '_count')
+        self.content = {
+          "query": {
+            "bool": {
+              "filter": [
+                {"range": { "@timestamp": {"gte": 1618871111000}}}
+              ],
+              "should": [
+                {"term": { "flow.server.ip.addr": "192.168.1.0/24"}},
+              ],
+              "minimum_should_match": 1
+            }
+          }
+        }
+
+    def run(self):
+        logger.info('Started DDoS ALERT thread')
+        while True:
+            try:
+                response = self.send_request()
+                self.handle_response(response)
+            except ValueError:
+                pass
+            time.sleep(5)
+
+    def get_timestamp(self):
+        timestamp = round((datetime.now().timestamp() - 60) * 1000)
+        self.content['query']['bool']['filter'][0]['range']['@timestamp']['gte'] = timestamp
+
+    def send_request(self):
+        self.get_timestamp()
+        response = requests.post(self.url, json=self.content)
+        if response.status_code != 200:
+            logger.warning(f'Elasticsearch request failed with code {response.status_code}')
+            json_querry = json.dumps(self.content)
+            logger.warning(json_querry)
+            raise ValueError('Bad request')
+        return json.loads(response.text)
+
+    def handle_response(self, response):
+        if response['count'] > 100:
+            print('DDoS found for our attacks')
+            self.send_telegram('DDoS found for our attacks')
+
+    def send_telegram(self, message: str):
+        bot = telegram.Bot(token=token)
+        bot.sendMessage(chat_id="-624999628", text=message)
 
 class AddressListWorker(threading.Thread):
     def __init__(self, banned_ips: BannedIPs, *args, **kwargs):
@@ -166,10 +214,11 @@ class AddressListWorker(threading.Thread):
         logger.error(f'Update \"{update}\" caused error \"{context.error}\"')
         logger.error('Update services may be down')
 
-
 if __name__ == '__main__':
     banned = BannedIPs(banned_ips)
-    alert_worker = AlertWorker(banned, daemon=True)
+    blacklist_worker = BlacklistAlertWorker(banned, daemon=True)
+    ddos_worker = DDoSAlertWorker(daemon=True)
     address_worker = AddressListWorker(banned, daemon=True)
-    alert_worker.start()
+    blacklist_worker.start()
+    ddos_worker.start()
     address_worker.run()
