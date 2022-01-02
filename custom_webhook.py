@@ -111,7 +111,7 @@ class AlertWorker(threading.Thread):
 
     def send_telegram(self, message: str):
         bot = telegram.Bot(token=token)
-        bot.sendMessage(chat_id="-624999628", text=msg)
+        bot.sendMessage(chat_id="-624999628", text=message)
 
 
 class AddressListWorker(threading.Thread):
@@ -148,7 +148,7 @@ class AddressListWorker(threading.Thread):
         except(IndexError, ValueError):
             update.message.reply_text('/add_to_blacklist <Add a valid IP>')
 
-    def remove_blacklist(self):
+    def remove_blacklist(self, update, context):
         try:
             ip = context.args[0]
             banned_ips.remove(ip)
