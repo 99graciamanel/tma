@@ -22,7 +22,7 @@ global token
 token = "5089246815:AAHAtnr5iV8twx-rIFgrS4PCoHWZnyF9alg"
 
 # Initialize logger
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(threadName)s:%(name)s:%(levelname)s: %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def isValidIP(ip):
@@ -60,7 +60,7 @@ class BannedIPs:
 
 class BlacklistAlertWorker(threading.Thread):
     def __init__(self, banned_ips: BannedIPs, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(name='BLThread', *args, **kwargs)
         self.banned_ips = banned_ips
         self.url = "%s%s" % (url, '_search')
         self.content = {
@@ -117,9 +117,10 @@ class BlacklistAlertWorker(threading.Thread):
         bot = telegram.Bot(token=token)
         bot.sendMessage(chat_id="-624999628", text=message)
 
+
 class DDoSAlertWorker(threading.Thread):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(name='DDosTread', *args, **kwargs)
         self.url = "%s%s" % (url, '_count')
         self.content = {
           "query": {
@@ -213,6 +214,7 @@ class AddressListWorker(threading.Thread):
     def error(self, update, context):
         logger.error(f'Update \"{update}\" caused error \"{context.error}\"')
         logger.error('Update services may be down')
+
 
 if __name__ == '__main__':
     banned = BannedIPs(banned_ips)
