@@ -9,22 +9,7 @@ from datetime import datetime
 
 banned_ips = ['147.83.2.134', '147.83.2.135']
 timestamp = 0
-url = 'http://0.0.0.0:9200/_search'
-content = {
-  "query": {
-    "bool": {
-      "must": [
-         {"match_phrase": {"flow.server.ip.addr": ["192.168.1.39"]}},
-         {"range": {
-           "@timestamp": {
-             "gte": 1641122028632
-              }
-           }
-         }
-      ]
-    }
-  }
-}
+url = 'http://0.0.0.0:9200/elastiflow*/_search'
 help_message = '''\
 - help
 - get_blacklist
@@ -80,6 +65,20 @@ class AlertWorker(threading.Thread):
     def __init__(self, banned_ips: BannedIPs, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.banned_ips = banned_ips
+        self.content = {
+          "query": {
+            "bool": {
+              "filter": [
+                {"range": { "@timestamp": {"gte": 1618871111000}}}
+              ],
+              "should": [
+                {"term": { "flow.server.ip.addr": "147.83.2.134"}},
+                {"term": { "flow.server.ip.addr": "147.83.2.135"}},
+              ],
+              "minimum_should_match": 1
+            }
+          }
+        }
 
     def run(self):
         logger.info('Started ALERT thread')
@@ -91,12 +90,19 @@ class AlertWorker(threading.Thread):
                 pass
             time.sleep(5)
 
-    def send_request(self):
+    def get_rules(self):
+        self.content['query']['bool']['should'] = []
+        for ip in self.banned_ips.get_list():
+            self.content['query']['bool']['should'].append({"term": { "flow.server.ip.addr": ip}})
+
+    def get_timestamp(self):
         timestamp = round((datetime.now().timestamp() - 60) * 1000)
-        content['query']['bool']['must'][0]["match_phrase"]["flow.server.ip.addr"] = banned_ips
-        #content['query']['bool']['must'][0]["match_phrase"]["flow.server.ip.addr"] =  self.banned_ips.get_list()
-        content['query']['bool']['must'][1]['range']['@timestamp']['gte'] = timestamp
-        response = requests.post(url, json=content)
+        self.content['query']['bool']['filter'][0]['range']['@timestamp']['gte'] = timestamp
+
+    def send_request(self):
+        self.get_rules()
+        self.get_timestamp()
+        response = requests.post(url, json=self.content)
         if response.status_code != 200:
             logger.warning(f'Elasticsearch request failed with code {response.status_code}')
             json_querry = json.dumps(content)
