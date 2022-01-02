@@ -1,2 +1,3 @@
 sflow-compose-config-*
 .idea
+/venv
