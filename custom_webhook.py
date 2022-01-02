@@ -38,28 +38,52 @@ logger = logging.getLogger(__name__)
 global token
 token = "5089246815:AAHAtnr5iV8twx-rIFgrS4PCoHWZnyF9alg"
 
+def getBlackList(update, context):
+    update.message.reply_text("Current blacklist is: %s" % (', '.join(banned_ips)))
+
 def addToBlacklist(update, context):
     try:
         ip = context.args[0]
         if not isValidIP(ip):
             update.message.reply_text("Not valid IP")
             return
+
         banned_ips.add(ip)
         content['query']['bool']['must'][0]['match_phrase']['flow.export.host.name'] = banned_ips
-        update.message.reply_text("Added to banned IPs. Current list.")
+
+        print(', '.join(banned_ips))
+        update.message.reply_text("Added to banned IPs. Current blacklist is: %s" % (', '.join(banned_ips)))
+
     except(IndexError, ValueError):
         update.message.reply_text('/add_to_blacklist <Add a valid IP>')
 
 def removeFromBlacklist(update, context):
-    update.message.reply_text("Work in progress")
+    try:
+        ip = context.args[0]
+        if not isValidIP(ip):
+            update.message.reply_text("Not valid IP")
+            return
+
+        if not (ip in banned_ips):
+            update.message.reply_text("IP not found in blacklist. Current is: %s" % (', '.join(banned_ips)))
+            return
+
+        banned_ips.remove(ip)
+        content['query']['bool']['must'][0]['match_phrase']['flow.export.host.name'] = banned_ips
+
+        print(', '.join(banned_ips))
+        update.message.reply_text("Removed from banned IPs. Current blacklist is: %s" % (', '.join(banned_ips)))
+
+    except(IndexError, ValueError):
+        update.message.reply_text('/remove_from_blacklist <Add a valid IP>')
 
 def help(update, context):
     update.message.reply_text(" \
         - help\n\
+        - get_blacklist\n\
         - add_to_blacklist\n\
         - remove_from_blacklist\n\
-" )
-
+")
 
 def isValidIP(ip):
     parts = ip.split(".")
@@ -89,6 +113,7 @@ if __name__ == '__main__':
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("help", help))
+    dp.add_handler(CommandHandler("get_blacklist", getBlackList))
     dp.add_handler(CommandHandler("add_to_blacklist", addToBlacklist))
     dp.add_handler(CommandHandler("remove_from_blacklist", removeFromBlacklist))
 
