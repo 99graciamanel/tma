@@ -6,6 +6,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import requests
 import json
 import threading
+import socket
 from datetime import datetime
 
 banned_ips = ['147.83.2.134', '147.83.2.135']
@@ -208,6 +209,7 @@ class AddressListWorker(threading.Thread):
         self.dispatcher.add_handler(CommandHandler("help", self.get_help))
         self.dispatcher.add_handler(CommandHandler("get_blacklist", self.get_blacklist))
         self.dispatcher.add_handler(CommandHandler("add_blacklist", self.add_blacklist))
+        self.dispatcher.add_handler(CommandHandler("add_domain", self.add_domain))
         self.dispatcher.add_handler(CommandHandler("remove_blacklist", self.remove_blacklist))
         self.dispatcher.add_error_handler(self.error)
 
@@ -244,6 +246,16 @@ class AddressListWorker(threading.Thread):
             logger.info(f'Removed {ip} from banned IPs.')
         except(IndexError, ValueError):
             update.message.reply_text('/remove_blacklist <Add a valid IP>')
+
+    def add_domain(self, update, context):
+        try:
+            hostname, aliaslist, ipaddrlist = socket.gethostbyname_ex(context.args[0])
+            for ip in ipaddrlist:
+                self.banned_ips.add(ip)
+                update.message.reply_text(f'Added {ip} to banned IPs.')
+                logger.info(f'Added {ip} to banned IPs.')
+        except Exception:
+            update.message.reply_text('/add_domain <Add a valid domain>')
 
     def error(self, update, context):
         logger.error(f'Update \"{update}\" caused error \"{context.error}\".')
