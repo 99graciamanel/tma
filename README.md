@@ -102,3 +102,13 @@ If the router supports flow recording, architecture is not as important as the R
 +-------------------------+
 ```
 
+## Results
+In this section we will show some of the results obtained.
+
+![Dashboard overview](images/pic4.png)
+
+![Flow Detection](images/pic1.png)
+
+![Top-N](images/pic2.png)
+
+![Geolocation](images/pic3.png)
